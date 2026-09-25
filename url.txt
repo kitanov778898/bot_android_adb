@@ -1,0 +1,14 @@
+curl -s https://raw.githubusercontent.com/nohajc/termux-adb/master/install.sh | bash
+
+
+Теперь, когда вы освоили adb exec-out screencap, можно идти глубже:
+
+· Симуляция касаний:
+    adb shell input tap X Y — клик в нужную точку.
+· Свайпы:
+    adb shell input swipe X1 Y1 X2 Y2 длительность
+· Получение текста с экрана:
+    adb shell uiautomator dump — выгружает XML-структуру интерфейса (можно парсить и находить элементы).
+· Скрипты на Python/Node.js:
+    Легко обернуть всё в цикл с условиями, добавить распознавание скриншотов через OpenCV/Tesseract.
+

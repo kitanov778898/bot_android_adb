@@ -1,0 +1,368 @@
+╔══════════════════════════════════════════════════════════════════════════════╗
+║              📱 ADB КОМАНДЫ — ШПАРГАЛКА ДЛЯ ПРОЕКТА КЛИКЕР                  ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+adb shell am start -n com.fingersoft.hillclimb/com.fingersoft.game.MainActivity
+
+списке недавних задач (стек recents)
+adb shell dumpsys activity recents | grep com.fingersoft.hillclimb
+
+adb shell am start -f 0x00020000 -n com.fingersoft.hillclimb/com.fingersoft.game.MainActivity
+-f 0x00020000  — это шестнадцатеричный код флага  FLAG_ACTIVITY_REORDER_TO_FRONT . Он говорит системе: найди уже запущенный экземпляр этого приложения в стеке задач и просто перемести его наверх, не перезагружая его жизненный цикл.
+
+
+
+
+
+
+═══════════════════════════════════════════════════════════════════════════════
+🔌 ПОДКЛЮЧЕНИЕ (планшет → POCO по WiFi)
+═══════════════════════════════════════════════════════════════════════════════
+
+adb devices
+    # Показать список подключённых устройств
+    # Должно быть: 192.168.10.185:45107  device
+
+adb connect 192.168.10.185:45107
+    # Подключиться к POCO по WiFi (IP и порт смотри на телефоне)
+    # Если порт сменился — смотри актуальный в "Беспроводная отладка"
+
+adb disconnect 192.168.10.185:45107
+    # Отключиться
+
+adb kill-server
+    # Убить сервер ADB (если глючит)
+
+adb start-server
+    # Запустить сервер заново
+
+
+═══════════════════════════════════════════════════════════════════════════════
+📱 УПРАВЛЕНИЕ ПРИЛОЖЕНИЯМИ
+═══════════════════════════════════════════════════════════════════════════════
+
+adb shell monkey -p com.fingersoft.hillclimb 1
+    # Запустить Hill Climb
+
+adb shell monkey -p com.ea.game.starwarscapital_row 1
+    # Запустить Star Wars
+
+adb shell am force-stop com.fingersoft.hillclimb
+    # Принудительно закрыть Hill Climb
+
+adb shell pm list packages -3
+    # Список всех сторонних приложений (без системных)
+
+adb shell pm list packages -3 | grep -i "hill\|star\|war"
+    # Поиск приложений по ключевым словам
+
+adb shell dumpsys window | grep mCurrentFocus
+    # Показать, какое приложение сейчас активно
+
+
+═══════════════════════════════════════════════════════════════════════════════
+🖱️ КАСАНИЯ (НЕ РАБОТАЮТ НА POCO ЧЕРЕЗ WiFi — ТОЛЬКО ЧЕРЕЗ USB С ПК)
+═══════════════════════════════════════════════════════════════════════════════
+
+adb shell input tap 540 1200
+    # Клик в точку X=540 Y=1200
+    # ⚠️ НА POCO ЧЕРЕЗ WiFi: java.lang.SecurityException
+    # ✅ НА POCO ЧЕРЕЗ USB С ПК: работает
+
+adb shell input swipe 100 500 100 100
+    # Свайп от (100,500) до (100,100)
+
+adb shell input text "hello"
+    # Ввести текст
+
+adb shell input keyevent 4
+    # Кнопка "Назад"
+
+adb shell input keyevent 3
+    # Кнопка "Домой"
+
+adb shell input keyevent 26
+    # Блокировка / разблокировка экрана
+
+
+═══════════════════════════════════════════════════════════════════════════════
+📸 СКРИНШОТЫ
+═══════════════════════════════════════════════════════════════════════════════
+
+adb exec-out screencap -p > screen.png
+    # Сделать скриншот и сохранить сразу на планшет
+    # Файл появится в текущей папке Termux
+
+adb shell screencap -p /sdcard/screen.png
+    # Скриншот на телефон (в папку Downloads)
+
+adb shell screenrecord /sdcard/video.mp4
+    # Запись экрана (остановить: Ctrl+C)
+
+
+═══════════════════════════════════════════════════════════════════════════════
+📡 GETEVENT — ЧТЕНИЕ КАСАНИЙ ТАЧСКРИНА (РАБОТАЕТ НА POCO)
+═══════════════════════════════════════════════════════════════════════════════
+
+adb shell getevent -lp /dev/input/event3
+    # Показать параметры тачскрина
+    # Ищи: ABS_MT_POSITION_X (min, max)
+    #      ABS_MT_POSITION_Y (min, max)
+    # Для POCO: max X=17280, max Y=38400
+
+adb shell getevent -lt /dev/input/event3
+    # Показать касания в реальном времени (hex-формат)
+    # Остановить: Ctrl+C
+
+adb shell getevent -lt /dev/input/event3 > touch_log.txt
+    # Записать касания в файл
+    # Потыкай пальцем в экран телефона
+    # Потом Ctrl+C — файл готов
+
+
+═══════════════════════════════════════════════════════════════════════════════
+⚙️ СИСТЕМНЫЕ НАСТРОЙКИ
+═══════════════════════════════════════════════════════════════════════════════
+
+adb shell wm size
+    # Разрешение экрана телефона
+    # POCO: Physical size: 1080x2400
+
+adb shell settings put system show_touches 1
+    # Включить белые кружки нажатий (видно, куда кликнул)
+
+adb shell settings put system show_touches 0
+    # Выключить кружки
+
+adb shell dumpsys battery
+    # Информация о батарее
+
+adb shell dumpsys cpuinfo
+    # Загрузка процессора
+
+
+═══════════════════════════════════════════════════════════════════════════════
+🐍 PYTHON-СКРИПТ: ЗАПУСК + СКРИНШОТ (для Termux на планшете)
+═══════════════════════════════════════════════════════════════════════════════
+
+import os
+import time
+
+APP = "com.fingersoft.hillclimb"
+
+def run(cmd):
+    print(f">>> {cmd}")
+    os.system(cmd)
+
+run(f"adb shell monkey -p {APP} 1")
+time.sleep(5)
+run("adb exec-out screencap -p > menu.png")
+print("Готово! Скриншот сохранён как menu.png")
+
+
+═══════════════════════════════════════════════════════════════════════════════
+📋 ТИПОВОЙ ЦИКЛ РАБОТЫ
+═══════════════════════════════════════════════════════════════════════════════
+
+1. Подключиться:
+   adb connect 192.168.10.185:45107
+
+2. Проверить:
+   adb devices
+
+3. Запустить игру:
+   adb shell monkey -p com.fingersoft.hillclimb 1
+
+4. Скриншот:
+   adb exec-out screencap -p > menu.png
+
+5. Записать касания (для поиска координат):
+   adb shell getevent -lt /dev/input/event3 > touch.txt
+   # Тычешь пальцем в START, Ctrl+C
+
+6. Разобрать координаты (через скрипт parse_touch.py)
+
+
+═══════════════════════════════════════════════════════════════════════════════
+⚠️ ВАЖНЫЕ ОГРАНИЧЕНИЯ POCO M6 Pro
+═══════════════════════════════════════════════════════════════════════════════
+
+❌ ЧЕРЕЗ WiFi ADB (с планшета):
+   adb shell input tap X Y
+   → java.lang.SecurityException: INJECT_EVENTS permission denied
+   Xiaomi блокирует эмуляцию касаний через WiFi
+
+✅ ЧЕРЕЗ USB ADB (с ПК):
+   adb shell input tap X Y
+   → РАБОТАЕТ
+
+✅ GETEVENT (чтение касаний):
+   → РАБОТАЕТ и через WiFi, и через USB
+
+
+═══════════════════════════════════════════════════════════════════════════════
+                         🎉 УДАЧНОГО ДЕБАГА!
+═══════════════════════════════════════════════════════════════════════════════
+==================================================
+   ШПАРГАЛКА: ЗВУК В TERMUX
+==================================================
+
+--------------------------------------------------
+УСТАНОВКА (один раз)
+--------------------------------------------------
+pkg update && pkg upgrade
+pkg install termux-api python ffmpeg play-audio
+termux-setup-storage
+
+Требуется также:
+  - приложение Termux:API (из F-Droid)
+  - TTS-движок (Speech Services by Google) в системе
+
+
+--------------------------------------------------
+СИНТЕЗ РЕЧИ (TTS)
+--------------------------------------------------
+# Простой тест
+termux-tts-speak "Привет, это тест"
+
+# С указанием языка и скорости
+termux-tts-speak -l ru -r 0.9 -p 1.0 "Медленная фраза"
+
+# Явно указать движок
+termux-tts-speak -e com.google.android.tts -l ru "Текст"
+
+# Список доступных движков
+termux-tts-engines
+
+# Проверка кода возврата
+termux-tts-speak "тест"; echo "rc=$?"
+
+
+--------------------------------------------------
+ВОСПРОИЗВЕДЕНИЕ
+--------------------------------------------------
+# Через Android-медиаплеер (поддерживает паузу)
+termux-media-player play ~/storage/shared/Music/song.mp3
+termux-media-player pause
+termux-media-player stop
+
+# Через play-audio (лёгкий, для коротких звуков)
+play-audio ~/storage/shared/Music/beep.wav
+
+# Фоном, без блокировки скрипта
+play-audio ~/storage/shared/Music/beep.wav &
+
+
+--------------------------------------------------
+ЗАПИСЬ С МИКРОФОНА
+--------------------------------------------------
+# Запись 5 секунд в WAV
+termux-microphone-record -f ~/storage/shared/Music/rec.wav -e wav -l 5
+
+# Запись без лимита (остановить вручную)
+termux-microphone-record -f ~/storage/shared/Music/rec.wav -e wav
+termux-microphone-record -q
+
+# Запись в AAC (компактнее)
+termux-microphone-record -f ~/storage/shared/Music/rec.aac -e aac -l 10
+
+
+--------------------------------------------------
+ГРОМКОСТЬ
+--------------------------------------------------
+# Показать текущие уровни по потокам
+termux-volume
+
+# Установить громкость (значение из вывода выше)
+termux-volume music 15
+termux-volume ring 10
+
+
+--------------------------------------------------
+ГЕНЕРАЦИЯ ЗВУКА (ffmpeg)
+--------------------------------------------------
+# Тон 1000 Гц, 2 секунды, WAV
+ffmpeg -f lavfi -i "sine=frequency=1000:duration=2" -ar 44100 $TMPDIR/beep.wav
+
+# Тон 440 Гц (нота Ля), 3 секунды
+ffmpeg -f lavfi -i "sine=frequency=440:duration=3" -ar 44100 $TMPDIR/a.wav
+
+# Конвертация MP3 -> WAV
+ffmpeg -i input.mp3 -ar 44100 output.wav
+
+# Конвертация WAV -> MP3
+ffmpeg -i input.wav -b:a 128k output.mp3
+
+# Обрезать фрагмент (с 2 до 5 секунды)
+ffmpeg -i in.mp3 -ss 00:00:02 -to 00:00:05 -c copy out.mp3
+
+
+--------------------------------------------------
+ПУТИ (ВАЖНО)
+--------------------------------------------------
+echo $TMPDIR              # временные файлы
+~/storage/shared/Music    # общая папка Music
+~/storage/shared/         # корень внешней памяти
+
+
+--------------------------------------------------
+PYTHON - ВЫЗОВ КОМАНД
+--------------------------------------------------
+import subprocess
+import os
+
+AUDIO = os.path.expanduser("~/storage/shared/Music")
+
+def say(text, lang="ru"):
+    subprocess.run(["termux-tts-speak", "-l", lang, text])
+
+def play(filename):
+    path = os.path.join(AUDIO, filename)
+    subprocess.Popen(["termux-media-player", "play", path],
+                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+def record(name="rec.wav", sec=5):
+    path = os.path.join(AUDIO, name)
+    subprocess.run(["termux-microphone-record",
+                    "-f", path, "-e", "wav", "-l", str(sec)])
+    return path
+
+def stop_all():
+    subprocess.run(["termux-microphone-record", "-q"], capture_output=True)
+    subprocess.run(["termux-media-player", "stop"], capture_output=True)
+    subprocess.run(["pkill", "-f", "play-audio"], capture_output=True)
+
+if __name__ == "__main__":
+    say("Начинаю запись")
+    rec = record("test.wav", 3)
+    say("Запись завершена")
+    play("test.wav")
+
+
+--------------------------------------------------
+БЫСТРЫЙ ТЕСТ "ВСЁ РАБОТАЕТ"
+--------------------------------------------------
+termux-battery-status
+ffmpeg -f lavfi -i "sine=frequency=1000:duration=2" -ar 44100 $TMPDIR/beep.wav
+termux-media-player play $TMPDIR/beep.wav
+termux-tts-speak "тест"
+
+
+--------------------------------------------------
+ЧАСТЫЕ ПРОБЛЕМЫ
+--------------------------------------------------
+termux-tts-speak молчит, rc=0  -> нет TTS-движка.
+                                  Установить Speech Services by Google,
+                                  активировать в настройках Android.
+
+/tmp/beep.wav: No such file    -> в Termux нет /tmp.
+                                  Использовать $TMPDIR.
+
+termux-* молчат                -> нет приложения Termux:API.
+                                  Установить из F-Droid.
+
+Нет звука, но всё работает     -> низкая громкость "Медиа".
+                                  termux-volume music 15
+
+play-audio не найден           -> pkg install play-audio
+
+==================================================
