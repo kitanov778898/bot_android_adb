@@ -3,6 +3,9 @@ import time
 from time import sleep
 from adb_tools import run_game, screenshot, draw_tap,click_start_if_found, speak_text, pulse_gas
 
+__version__ = "1.0.1"
+
+
 # Координаты кнопок под твой экран 1920x1200
 START_X, START_Y = 1550, 750
 GAS_X, GAS_Y = 1670, 1000

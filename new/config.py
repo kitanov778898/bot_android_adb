@@ -1,5 +1,9 @@
 # config.py
 # Настройки игры
+
+__version__ = "1.0.1"
+
+
 PACKAGE_NAME = "com.fingersoft.hillclimb"
 ACTIVITY_NAME = "com.fingersoft.game.MainActivity"
 

@@ -1,5 +1,8 @@
 from PIL import Image, ImageDraw
 
+__version__ = "1.0.1"
+
+
 # ——— настройки –———————————————————————————————————————
 INPUT = "screen.png"           # исходный скриншот
 OUTPUT = "button_start.png"    # куда сохранить шаблон

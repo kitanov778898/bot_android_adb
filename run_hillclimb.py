@@ -2,6 +2,9 @@ import subprocess
 import time
 import os # Подключаем модуль для работы с путями и папками
 
+__version__ = "1.0.1"
+
+
 PACKAGE = "com.fingersoft.hillclimb"
 
 # 1. Создаём переменную для папки

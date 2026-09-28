@@ -1,5 +1,8 @@
 import cv2
 
+__version__ = "1.0.1"
+
+
 # ——— настройки –———————————————————————————————————————
 SCREEN = "screen.png"
 TEMPLATE = "button_start.png"

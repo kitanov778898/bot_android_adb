@@ -2,6 +2,9 @@ import cv2
 from adb_tools import grab_screen, find_template
 from config import START_ROI
 
+__version__ = "1.0.1"
+
+
 def main():
     # 1. Читаем шаблон
     template = cv2.imread("button_start.png", cv2.IMREAD_COLOR)

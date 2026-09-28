@@ -12,6 +12,8 @@ from config import (
 )
 from PIL import Image, ImageDraw
 
+__version__ = "1.0.1"
+
 
 def run_game():
     """Запускает игру"""

@@ -3,6 +3,8 @@ import time
 from config import START_ROI
 from adb_tools import grab_screen, find_template, tap, run_game
 
+__version__ = "1.0.1"
+
 def main():
     # 1. Загружаем шаблон ОДИН раз при старте
     template = cv2.imread("button_start.png", cv2.IMREAD_COLOR)

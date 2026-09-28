@@ -1,4 +1,5 @@
 # config.py
+__version__ = "1.0.1"
 X = 540
 Y = 1200
 DELAY = 2

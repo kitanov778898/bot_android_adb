@@ -1,5 +1,9 @@
 from time import sleep
 from adb_tools import run_game, screenshot, tap, draw_tap,speak_text
+
+__version__ = "1.0.1"
+
+
 #———(1) запуск игры ——-
 speak_text("запуск игры")
 run_game()
