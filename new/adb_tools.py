@@ -1,9 +1,11 @@
 import subprocess
 import re
 import time
+import logging
 import cv2
 import numpy as np
 import select
+logging.basicConfig(level=logging.INFO, filename="py_log.log",filemode="w")
 from config import (
     PACKAGE_NAME, ACTIVITY_NAME,
     SCREEN_W, SCREEN_H, RAW_MAX_X, RAW_MAX_Y,
