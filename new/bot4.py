@@ -1,7 +1,7 @@
 import cv2
 import time
 from config import START_ROI
-from adb_tools import grab_screen, find_template, tap, run_game
+from adb_tools import grab_screen, find_template, tap, run_game,speak_text
 
 __version__ = "1.0.1"
 
@@ -12,6 +12,9 @@ def main():
         print("❌ Ошибка: нет файла button_start.png в папке!")
         return
     print(f"✅ Шаблон загружен, размер: {template.shape}")
+
+    # проверяем что есть координаты для области поска
+    print(f"✅ коардинаты загружены, размер: {START_ROI}")
 
     # 2. Запускаем игру
     print("🚀 Запускаем игру...")
@@ -69,6 +72,7 @@ def main():
         print("🎉 Бот успешно нажал START! Миссия выполнена.")
     else:
         print("❌ Бот не смог нажать START. Смотри debug_last_screen.png и проверяй ROI.")
+    speak_text("Скрипт отработал можно переключатся !")
 
 if __name__ == "__main__":
     main()

@@ -397,6 +397,32 @@ def wait_for_template(template, timeout=30, interval=1.0, threshold=0.85, roi=No
 
         time.sleep(interval)
 
+def draw_roi(screen, roi, output_path="debug_roi.png"):
+    """
+    Рисует прямоугольник ROI на скриншоте и сохраняет результат.
+    
+    Args:
+        screen: BGR numpy-массив (скриншот)
+        roi: (x1, y1, x2, y2) — область поиска
+        output_path: путь для сохранения
+    """
+    if roi is None:
+        print("⚠️ ROI не задан, нечего рисовать")
+        return
+    
+    x1, y1, x2, y2 = roi
+    # Копируем скриншот, чтобы не портить оригинал
+    debug_img = screen.copy()
+    # Рисуем зеленый прямоугольник
+    cv2.rectangle(debug_img, (x1, y1), (x2, y2), (0, 255, 0), 3)
+    # Подписываем
+    cv2.putText(debug_img, f"ROI: ({x1},{y1})-({x2},{y2})", 
+                (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 
+                0.8, (0, 255, 0), 2)
+    # Сохраняем
+    cv2.imwrite(output_path, debug_img)
+    print(f"✅ ROI нарисован и сохранен: {output_path}")
+
 # ———- шаблон для новой функции –—————————————————————————-
 
 def function_name(param1, param2="default"):
