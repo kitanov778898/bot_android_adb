@@ -51,6 +51,21 @@ def tap(x, y):
     print(f"✅ Клик в точке ({x}, {y})")
 
 
+def swipe(start_x, start_y, end_x, end_y, duration=500):
+    """Делает свайп по экрану от одной точки к другой с заданной длительностью"""
+    subprocess.run(
+        [
+            "adb", "shell", "input", "swipe", 
+            str(start_x), str(start_y), 
+            str(end_x), str(end_y), 
+            str(duration)
+        ],
+        capture_output=True,
+        text=True
+    )
+    print(f"↔️ Свайп из ({start_x}, {start_y}) в ({end_x}, {end_y}) за {duration}мс")
+
+
 def monitor_touches3(timeout=10):
     """Читает лог касаний, переводит в экранные координаты и возвращает их"""
     print(f"⏳ Слушаю экран {timeout} секунд. Касайся экрана!")

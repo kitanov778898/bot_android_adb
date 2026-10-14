@@ -1,9 +1,9 @@
 import cv2
 
 # ——— настройки –———————————————————————————————————————
-SCREEN = "close.png"
+SCREEN = "screenshot_готово.png"
 #SCREEN = "screen.png"
-TEMPLATE = "botton_close.png"
+TEMPLATE = "button_старт.png"
 THRESHOLD = 0.8
 PREVIEW = "screen_found.png"
 # ———————————————————————————————————————————————————————
