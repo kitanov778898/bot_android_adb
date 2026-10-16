@@ -1,25 +1,24 @@
 """
-Скрипт для теста запуска и поиска кнопки СТАРТ.
-Версия: 1.1.2
+Скрипт для автоматизации гонки (Hill Climb Racing).
+Версия: 1.1.6
 
 ШАБЛОНЫ (лежат в assets/search_ui_components/):
 - button_СТАРТ.png       — первая кнопка СТАРТ в меню
 - button_СТАРТ_2.png     — вторая кнопка СТАРТ (после первого клика)
 - button_pause.png       — кнопка паузы (индикатор начала гонки)
-- button_close_2.png     — крестик во время гонки (реклама/окно)
-- button_car_outline.png — контур машины (заготовка)
+- button_close_2.png     — крестик во время гонки (реклама/конец гонки)
 """
 
 import subprocess
 import time
 from pathlib import Path
 from adb_tools import (
-    run_game, screenshot,
+    run_game, screenshot, swipe,
     pulse_gas,
     check_and_unlock_screen, wait_for_template
 )
 
-__version__ = "1.1.2"
+__version__ = "1.1.6"
 
 # ==============================================================================
 # [1] НАСТРОЙКИ
@@ -34,34 +33,31 @@ SCREENSHOT_DIR.mkdir(parents=True, exist_ok=True)
 TEMPLATE_START = UI_PATH / "button_СТАРТ.png"
 TEMPLATE_START_2 = UI_PATH / "button_СТАРТ_2.png"
 TEMPLATE_PAUSE = UI_PATH / "button_pause.png"
-TEMPLATE_CLOSE_2 = UI_PATH / "button_close_2.png"  # ← Новый шаблон
-TEMPLATE_CAR = UI_PATH / "button_car_outline.png"
+TEMPLATE_CLOSE_2 = UI_PATH / "button_close_2.png"
 
 # Координаты
 GAS_X, GAS_Y = 1670, 1000
 
-# Параметры газа (увеличены на 50% от предыдущих 120мс)
-GAS_HOLD_MS = 180      # Было 120мс, стало 180мс (+50%)
-GAS_PAUSE_MS = 200     # Пауза между нажатиями
-GAS_BLOCK_SEC = 20     # Длительность одного блока газа
-MAX_GAS_BLOCKS = 50     # Сколько блоков газа сделать (итого 50 сек)
+# Параметры газа
+GAS_HOLD_MS = 200      # Длительность нажатия (мс)
+GAS_PAUSE_MS = 180     # Пауза между нажатиями (мс)
+GAS_BLOCK_SEC = 15     # Длительность одного блока газа (сек)
+MAX_GAS_BLOCKS = 50    # Максимальное количество блоков газа
 
 
 # ==============================================================================
-# [2] ФУНКЦИЯ: ОЖИДАНИЕ НАЧАЛА ГОНКИ
+# [2] ФУНКЦИИ
 # ==============================================================================
 
 def wait_for_race_start(timeout=15, interval=1.0, threshold=0.75):
-    """Ждёт появления кнопки паузы — индикатор начала гонки."""
+    """
+    Ждёт появления кнопки паузы — индикатор начала гонки.
+    """
     print(f"   Ожидаю появления кнопки паузы (макс. {timeout} сек)...")
-    
     pos = wait_for_template(
         template=str(TEMPLATE_PAUSE),
-        timeout=timeout,
-        interval=interval,
-        threshold=threshold
+        timeout=timeout, interval=interval, threshold=threshold
     )
-    
     if pos:
         print(f"   ✅ Кнопка паузы найдена: {pos} — гонка началась!")
         return True
@@ -70,50 +66,26 @@ def wait_for_race_start(timeout=15, interval=1.0, threshold=0.75):
         return False
 
 
-# ==============================================================================
-# [3] ФУНКЦИЯ: ПОИСК КРЕСТИКА ВО ВРЕМЯ ГОНКИ
-# ==============================================================================
-
-def check_for_close_button(timeout=5, interval=0.5, threshold=0.70):
-    """
-    Ищет крестик button_close_2.png на экране.
-    
-    Returns:
-        (cx, cy) — координаты крестика, или None если не найден
-    """
-    pos = wait_for_template(
+def check_for_close_button(timeout=3, interval=0.5, threshold=0.70):
+    """Ищет крестик button_close_2.png на экране."""
+    return wait_for_template(
         template=str(TEMPLATE_CLOSE_2),
-        timeout=timeout,
-        interval=interval,
-        threshold=threshold
+        timeout=timeout, interval=interval, threshold=threshold
     )
-    return pos
 
 
 # ==============================================================================
-# [4] ФУНКЦИЯ-ЗАГЛУШКА: ПОИСК КОНТУРА МАШИНЫ
+# [3] ЗАПУСК И РАЗБЛОКИРОВКА
 # ==============================================================================
 
-def find_car_outline(timeout=15, interval=1.0, threshold=0.75):
-    """
-    Ищет контур машины на экране.
-    TODO: Реализовать поиск через wait_for_template(template=TEMPLATE_CAR)
-    """
-    pass
-
-
-# ==============================================================================
-# [5] ЗАПУСК И РАЗБЛОКИРОВКА
-# ==============================================================================
-
-print(f"\n—————  ЗАПУСК БОТА v{__version__} ———-")
+print(f"\n————— 🤖 ЗАПУСК БОТА v{__version__} ———-")
 
 if not check_and_unlock_screen(pin="seal"):
     print("⚠️ Экран не разблокирован, продолжаю...")
 
 
 # ==============================================================================
-# [6] ЭТАП 1: ЗАПУСК ИГРЫ И ПЕРВЫЙ СТАРТ
+# [4] ЭТАП 1: ПЕРВЫЙ СТАРТ
 # ==============================================================================
 
 run_game()
@@ -138,7 +110,7 @@ else:
 
 
 # ==============================================================================
-# [7] ЭТАП 2: ВТОРОЙ СТАРТ
+# [5] ЭТАП 2: ВТОРОЙ СТАРТ
 # ==============================================================================
 
 print("\n🔍 Этап 2: Жду появления кнопки 'СТАРТ_2' (макс. 20 сек)...")
@@ -161,34 +133,34 @@ else:
 
 
 # ==============================================================================
-# [8] ЭТАП 3: ОЖИДАНИЕ НАЧАЛА ГОНКИ
+# [6] ЭТАП 3: ОЖИДАНИЕ НАЧАЛА ГОНКИ
 # ==============================================================================
 
-print("\n Этап 3: Ожидаю начала гонки...")
-
+print("\n⏳ Этап 3: Ожидаю начала гонки (по иконке паузы)...")
 if not wait_for_race_start(timeout=15, interval=1.0, threshold=0.75):
     print("⚠️ Гонка не началась. Продолжаю через 3 секунды...")
     time.sleep(3)
 
 
 # ==============================================================================
-# [9] ЭТАП 4: СКРИНШОТ ДЛЯ КОНТУРА МАШИНЫ
+# [7] ЭТАП 4: СКРИНШОТ ДЛЯ КОНТУРА МАШИНЫ
 # ==============================================================================
 
 print("\n📸 Этап 4: Скриншот для контура машины...")
-
 car_screenshot = str(SCREENSHOT_DIR / "bot2_car_outline.png")
 screenshot(car_screenshot)
 print(f"📸 Скриншот сохранён: {car_screenshot}")
 
 
 # ==============================================================================
-# [10] ЭТАП 5: ЦИКЛИЧЕСКИЙ ГАЗ С ПОИСКОМ КРЕСТИКА
+# [8] ЭТАП 5: ЦИКЛИЧЕСКИЙ ГАЗ С ВЫХОДОМ ПРИ КРЕСТИКЕ
 # ==============================================================================
 
 print(f"\n🔥 Этап 5: Циклический газ ({MAX_GAS_BLOCKS} блоков по {GAS_BLOCK_SEC} сек)")
 print(f"   Параметры: hold={GAS_HOLD_MS}мс, pause={GAS_PAUSE_MS}мс")
-print(f"   Поиск крестика button_close_2.png каждые {GAS_BLOCK_SEC} сек\n")
+print(f"   ⚠️ При нахождении крестика — выход из цикла (конец гонки)\n")
+
+race_finished = False
 
 for block_num in range(1, MAX_GAS_BLOCKS + 1):
     print(f"--- Блок газа {block_num}/{MAX_GAS_BLOCKS} ---")
@@ -202,12 +174,12 @@ for block_num in range(1, MAX_GAS_BLOCKS + 1):
     close_pos = check_for_close_button(timeout=3, interval=0.5, threshold=0.70)
     
     if close_pos:
-        print(f"   ✅ Крестик найден: {close_pos}")
+        print(f"   ✅ Крестик найден: {close_pos} — конец гонки!")
         
         # Скриншот с крестиком
         close_screenshot = str(SCREENSHOT_DIR / f"bot2_close_found_block{block_num}.png")
         screenshot(close_screenshot)
-        print(f"    Скриншот сохранён: {close_screenshot}")
+        print(f"   📸 Скриншот сохранён: {close_screenshot}")
         
         # Кликаем по крестику
         subprocess.run(
@@ -215,18 +187,46 @@ for block_num in range(1, MAX_GAS_BLOCKS + 1):
             capture_output=True
         )
         print(f"   👆 Тап по крестику выполнен.")
-        time.sleep(2)  # Ждём закрытия окна
+        
+        race_finished = True
+        break  # ← ВЫХОД ИЗ ЦИКЛА
     else:
         print(f"   ⚪ Крестик не найден. Продолжаю газ.")
     
     print()  # Пустая строка для читаемости
 
+if race_finished:
+    print(f"\n Гонка завершена на блоке {block_num}/{MAX_GAS_BLOCKS}")
+else:
+    print(f"\n⚠️ Цикл газа завершён ({MAX_GAS_BLOCKS} блоков), крестик не появился")
+
 
 # ==============================================================================
-# [11] ЭТАП 6: ФИНАЛЬНЫЙ СКРИНШОТ
+# [9] ЭТАП 6: ЗАКРЫТИЕ ЭКРАНА РЕЗУЛЬТАТОВ (СВАЙП)
 # ==============================================================================
 
-final_screenshot = str(SCREENSHOT_DIR / "bot2_after_gas.png")
+if race_finished:
+    print("\n📱 Этап 6: Закрываю экран результатов свайпом...")
+    time.sleep(4)  # Ждём 4 секунды после закрытия крестика
+    
+    # Свайп вверх для закрытия экрана результатов
+    # От координат GAS (1670, 1000) вверх на 400 пикселей
+    swipe(
+        start_x=GAS_X, start_y=GAS_Y,
+        end_x=GAS_X, end_y=GAS_Y - 500,
+        duration=500
+    )
+    print(f"↕️ Свайп вверх выполнен: ({GAS_X}, {GAS_Y}) → ({GAS_X}, {GAS_Y - 500})")
+    time.sleep(2)  # Ждём возврата в меню
+else:
+    print("\n⚠️ Гонка не завершилась крестиком, пропускаю закрытие результатов")
+
+
+# ==============================================================================
+# [10] ЭТАП 7: ФИНАЛЬНЫЙ СКРИНШОТ
+# ==============================================================================
+
+final_screenshot = str(SCREENSHOT_DIR / "bot2_after_race.png")
 screenshot(final_screenshot)
 print(f"📸 Финальный скриншот: {final_screenshot}")
 
