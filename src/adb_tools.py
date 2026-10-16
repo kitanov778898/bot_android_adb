@@ -263,7 +263,7 @@ def parse_touch_log(filename="touchscreen_log.txt"):
 # ==============================================================================
 
 def click_start_if_found(template_path="button_start.png", threshold=0.8, 
-                         debug=False, debug_path="debug_found.png"):
+                         debug=False, debug_path=None):
     """
     Находит шаблон на экране Android-устройства.
     
@@ -271,7 +271,20 @@ def click_start_if_found(template_path="button_start.png", threshold=0.8,
         - debug=False (по умолчанию): находит и тапает по центру шаблона.
         - debug=True: НЕ тапает, а рисует рамку вокруг найденного 
           и сохраняет скриншот в debug_path (режим отладки).
+    
+    Args:
+        template_path: путь к PNG-файлу шаблона.
+        threshold: минимальная уверенность совпадения (0..1).
+        debug: если True — режим отладки (без клика, с сохранением скрина).
+        debug_path: путь для сохранения. Если None — сохраняется в 
+                    screenshot/debug_<timestamp>.png автоматически.
+    
+    Returns:
+        bool: True, если шаблон найден, иначе False.
     """
+    import time
+    from pathlib import Path
+    
     # 1. Читаем шаблон
     template = cv2.imread(template_path)
     if template is None:
@@ -287,7 +300,7 @@ def click_start_if_found(template_path="button_start.png", threshold=0.8,
     # 3. Декодируем в numpy-массив
     screen = cv2.imdecode(np.frombuffer(raw_bytes, dtype=np.uint8), cv2.IMREAD_COLOR)
     if screen is None:
-        print("❌ Не удалось декодировать скриншот. Проверьте подключение.")
+        print(" Не удалось декодировать скриншот. Проверьте подключение.")
         return False
 
     # 4. Ищем шаблон
@@ -309,6 +322,13 @@ def click_start_if_found(template_path="button_start.png", threshold=0.8,
             cv2.putText(debug_img, f"OK: {max_val:.2f}", 
                         (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 
                         0.8, (0, 255, 0), 2)
+            
+            # Если путь не задан — формируем автоматически
+            if debug_path is None:
+                debug_dir = Path("screenshot")
+                debug_dir.mkdir(exist_ok=True)
+                debug_path = str(debug_dir / f"debug_{int(time.time())}.png")
+            
             cv2.imwrite(debug_path, debug_img)
             print(f"🛠️ [DEBUG] Найдено! Уверенность: {max_val:.3f}")
             print(f"🛠️ [DEBUG] Центр: ({cx}, {cy})")
