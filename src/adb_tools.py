@@ -292,7 +292,22 @@ def click_start_if_found(template_path="button_start.png", threshold=0.8,
 
 
 def find_template(screen, template, threshold=0.85, roi=None):
-    """Ищет шаблон на numpy-массиве экрана."""
+    """
+    Ищет шаблон на numpy-массиве экрана.
+    
+    Args:
+        screen: BGR numpy-массив (скриншот).
+        template: BGR numpy-массив ИЛИ путь к файлу шаблона (str).
+        threshold: порог уверенности (0..1).
+        roi: (x1, y1, x2, y2) — область поиска.
+    """
+    # Если template — это строка (путь), загружаем изображение
+    if isinstance(template, str):
+        template = cv2.imread(template)
+        if template is None:
+            print(f"❌ Не удалось загрузить шаблон: {template}")
+            return None
+    
     h, w = template.shape[:2]
     x1, y1 = (0, 0) if roi is None else roi[:2]
     sub = screen[y1:roi[3], x1:roi[2]] if roi else screen
@@ -306,6 +321,41 @@ def find_template(screen, template, threshold=0.85, roi=None):
     if max_val >= threshold:
         return (max_loc[0] + w // 2 + x1, max_loc[1] + h // 2 + y1)
     return None
+
+
+def wait_for_template(template, timeout=30, interval=1.0, threshold=0.85, roi=None):
+    """
+    Ждёт появления шаблона на экране.
+    
+    Args:
+        template: BGR numpy-массив ИЛИ путь к файлу шаблона (str).
+        timeout: максимальное время ожидания в секундах.
+        interval: интервал между проверками в секундах.
+        threshold: порог уверенности.
+        roi: область поиска.
+    
+    Returns:
+        (cx, cy) — координаты центра шаблона, или None если не найдено.
+    """
+    # Если template — это строка (путь), загружаем изображение один раз
+    if isinstance(template, str):
+        template_img = cv2.imread(template)
+        if template_img is None:
+            print(f"❌ Не удалось загрузить шаблон: {template}")
+            return None
+    else:
+        template_img = template
+    
+    t0 = time.perf_counter()
+    while True:
+        screen = grab_screen()
+        if screen is not None:
+            pos = find_template(screen, template_img, threshold, roi)
+            if pos is not None:
+                return pos
+        if time.perf_counter() - t0 > timeout:
+            return None
+        time.sleep(interval)
 
 
 def wait_for_template(template, timeout=30, interval=1.0, threshold=0.85, roi=None):

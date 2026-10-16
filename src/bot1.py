@@ -1,99 +1,140 @@
 """
 Основной скрипт автоматизации (Hill Climb / Racing Bot).
-Версия: 1.2.0
-
-ОГЛАВЛЕНИЕ:
-[1] Импорты и настройки
-[2] Проверка и разблокировка экрана
-[3] Инициализация и запуск игры
-[4] Навигация по меню (UI) с отладкой
-[5] Завершение этапа
+Версия: 1.2.7
 """
 
 import time
+import subprocess
 from pathlib import Path
 from adb_tools import (
-    run_game, screenshot, draw_tap,
-    click_start_if_found, speak_text, pulse_gas, swipe,
-    check_and_unlock_screen  # ← Импортируем функцию разблокировки из adb_tools
+    run_game, screenshot,
+    click_start_if_found, swipe,
+    check_and_unlock_screen, wait_for_template
 )
 
-__version__ = "1.2.0"
-
+__version__ = "1.2.7"
 
 # ==============================================================================
-# [1] НАСТРОЙКИ И КОНСТАНТЫ
+# [1] НАСТРОЙКИ
 # ==============================================================================
 
-# Определяем корень проекта автоматически (на уровень выше src/)
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-
-# Пути к папкам
-ASSETS_DIR = PROJECT_ROOT / "assets"
-UI_PATH = ASSETS_DIR / "search_ui_components"
+UI_PATH = PROJECT_ROOT / "assets" / "search_ui_components"
 SCREENSHOT_DIR = PROJECT_ROOT / "src" / "screenshot"
-
-# Создаём папку для скриншотов, если её нет
 SCREENSHOT_DIR.mkdir(parents=True, exist_ok=True)
 
-# Координаты кнопок (под экран 1920x1200)
-GAS_X, GAS_Y = 1670, 1000
-BRAKE_X, BRAKE_Y = 250, 1000
-
-# Пути к UI-шаблонам (абсолютные)
 TEMPLATE_APPARAT = UI_PATH / "button_АППАРАТ.png"
-TEMPLATE_TUNING = UI_PATH / "button_ТЮНИНГ.png"
-TEMPLATE_STAGE = UI_PATH / "button_ЭТАП.png"
-TEMPLATE_START_RACE = UI_PATH / "button_СТАРТ.png"
+TEMPLATE_GARAGE = UI_PATH / "button_ГАРАЖ.png"
+TEMPLATE_DONE = UI_PATH / "button_ГОТОВО.png"
+TEMPLATE_DONE_2 = UI_PATH / "button_ГОТОВО_2.png"
 
 
 # ==============================================================================
-# [2] ПРОВЕРКА И РАЗБЛОКИРОВКА ЭКРАНА
+# [2] ЗАПУСК
 # ==============================================================================
 
 print(f"\n————— 🤖 ЗАПУСК БОТА v{__version__} ———-")
 
-# Вызываем функцию из adb_tools. Если экран выключен, она его разблокирует PIN-кодом "seal"
 if not check_and_unlock_screen(pin="seal"):
-    print("⚠️ Продолжаю работу, но экран может быть заблокирован...")
-
-
-# ==============================================================================
-# [3] ИНИЦИАЛИЗАЦИЯ И ЗАПУСК
-# ==============================================================================
+    print("⚠️ Экран не разблокирован, продолжаю...")
 
 run_game()
-print("🚀 Игра запущена. Ожидание загрузки главного меню (5 сек)...")
-time.sleep(5)
+print("🚀 Жду появления кнопки 'АППАРАТ' (макс. 20 сек)...")
 
 
 # ==============================================================================
-# [4] НАВИГАЦИЯ ПО МЕНЮ С ОТЛАДКОЙ
+# [3] ЭТАП 1: АППАРАТ
 # ==============================================================================
 
-print(f"\n🔍 Этап 1: Поиск кнопки 'АППАРАТ' (РЕЖИМ ОТЛАДКИ)...")
-
-# Явно передаем абсолютный путь, чтобы файл гарантированно улетел в src/screenshot/
-found_apparat = click_start_if_found(
-    template_path=str(TEMPLATE_APPARAT),
-    threshold=0.85,
-    debug=True,  # ← Включено: бот НЕ кликает, а рисует рамку
-    debug_path=str(SCREENSHOT_DIR / "debug_apparat.png")  # ← Явный путь сохранения
+pos = wait_for_template(
+    template=str(TEMPLATE_APPARAT),
+    timeout=20, interval=1.0, threshold=0.85
 )
 
-if found_apparat:
-    print("✅ Кнопка 'АППАРАТ' найдена!")
-    print(f"📸 Скриншот с рамкой сохранён: {SCREENSHOT_DIR / 'debug_apparat.png'}")
+if not pos:
+    print("❌ АППАРАТ не найден. Выход.")
+    exit(1)
+
+print(f"✅ АППАРАТ найден: {pos}")
+subprocess.run(
+    ["adb", "shell", "input", "tap", str(pos[0]), str(pos[1])],
+    capture_output=True
+)
+time.sleep(2)
+
+
+# ==============================================================================
+# [4] ЭТАП 2: ГАРАЖ (с прокруткой)
+# ==============================================================================
+
+print("\n🔍 Этап 2: Ищу ГАРАЖ...")
+found = False
+for i in range(15):
+    found = click_start_if_found(
+        template_path=str(TEMPLATE_GARAGE),
+        threshold=0.80,
+        debug=True,
+        debug_path=str(SCREENSHOT_DIR / f"garage_{i+1}.png")
+    )
+    if found:
+        print(f"✅ ГАРАЖ найден на свайпе {i+1}")
+        break
+    swipe(1300, 600, 900, 600, 600)
+    time.sleep(1.5)
+
+if not found:
+    print("❌ ГАРАЖ не найден. Выход.")
+    exit(1)
+
+
+# ==============================================================================
+# [5] ЭТАП 3: ГОТОВО
+# ==============================================================================
+
+print("\n🔍 Этап 3: Жду ГОТОВО...")
+pos = wait_for_template(
+    template=str(TEMPLATE_DONE),
+    timeout=15, interval=1.0, threshold=0.80
+)
+
+if pos:
+    print(f"✅ ГОТОВО найдено: {pos}")
+    subprocess.run(
+        ["adb", "shell", "input", "tap", str(pos[0]), str(pos[1])],
+        capture_output=True
+    )
+    time.sleep(3)
 else:
-    print("⚠️ Кнопка 'АППАРАТ' не найдена. Проверьте:")
-    print("   - Открыто ли нужное меню?")
-    print("   - Правильный ли путь к шаблону?")
-    print("   - Попробуйте снизить threshold до 0.7")
+    print("⚠️ ГОТОВО не найдено. Пропускаю.")
 
 
 # ==============================================================================
-# [5] ЗАВЕРШЕНИЕ ЭТАПА
+# [6] ЭТАП 4: ГОТОВО_2
 # ==============================================================================
 
-print("\n————— ✅ ЭТАП ЗАВЕРШЕН ———-")
+print("\n🔍 Этап 4: Жду ГОТОВО_2...")
+pos = wait_for_template(
+    template=str(TEMPLATE_DONE_2),
+    timeout=15, interval=1.0, threshold=0.80
+)
+
+if pos:
+    print(f"✅ ГОТОВО_2 найдено: {pos}")
+    subprocess.run(
+        ["adb", "shell", "input", "tap", str(pos[0]), str(pos[1])],
+        capture_output=True
+    )
+    time.sleep(2)
+else:
+    print("⚠️ ГОТОВО_2 не найдено за 15 секунд.")
+    print("📸 Делаю скриншот для анализа...")
+    screenshot(str(SCREENSHOT_DIR / "after_done_no_garage2.png"))
+    print(f"📁 Скриншот: {SCREENSHOT_DIR / 'after_done_no_garage2.png'}")
+
+
+# ==============================================================================
+# [7] ЗАВЕРШЕНИЕ
+# ==============================================================================
+
+print("\n————— ✅ ВСЕ ЭТАПЫ ЗАВЕРШЕНЫ ———-")
 print(f"📁 Папка скриншотов: {SCREENSHOT_DIR}\n")
