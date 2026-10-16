@@ -6,8 +6,7 @@
 [1] Инициализация и запуск
     - run_game()
 [2] Работа с экраном и медиа
-    - screenshot(), grab_screen(), record_screen()
-    - speak_text()
+    - screenshot(), grab_screen(), record_screen(), speak_text()
 [3] Базовые действия ввода (Input)
     - tap(), swipe(), tap_hold(), pulse_gas()
 [4] Анализ тачскрина (Touchscreen)
@@ -16,6 +15,8 @@
     - click_start_if_found(), find_template(), wait_for_template()
 [6] Утилиты отладки
     - draw_tap(), draw_roi()
+[7] Проверка и разблокировка экрана
+    - get_screen_status(), check_and_unlock_screen()
 """
 
 import subprocess
@@ -32,7 +33,7 @@ from config import (
     CLICK_INTERVAL, MAX_CLICKS
 )
 
-__version__ = "1.0.2"  # Обновлена версия после рефакторинга
+__version__ = "1.1.0"
 
 
 # ==============================================================================
@@ -73,14 +74,7 @@ def grab_screen():
 
 
 def record_screen(filename="video.mp4", size="1728x1080", time_limit=10):
-    """
-    Записывает видео с экрана через adb shell screenrecord.
-    
-    Args:
-        filename (str): имя файла на устройстве.
-        size (str): разрешение в формате "ШxВ".
-        time_limit (int): длительность записи в секундах.
-    """
+    """Записывает видео с экрана через adb shell screenrecord."""
     result = subprocess.run(
         ["adb", "shell", "screenrecord", "--verbose", "--size", size, 
          "--time-limit", str(time_limit), f"/sdcard/{filename}"],
@@ -93,10 +87,7 @@ def record_screen(filename="video.mp4", size="1728x1080", time_limit=10):
 
 
 def speak_text(text):
-    """
-    Воспроизводит заданный текст через Termux TTS.
-    Явно указывает движок Google для стабильности.
-    """
+    """Воспроизводит заданный текст через Termux TTS."""
     subprocess.run(["termux-tts-speak", "-e", "com.google.android.tts", "-l", "ru", text])
 
 
@@ -128,15 +119,7 @@ def tap_hold(x, y, hold_ms=300):
 
 
 def pulse_gas(x, y, duration_sec=10, hold_ms=100, pause_ms=200):
-    """
-    Пульсирует нажатием: удержание и отпускание в цикле.
-    
-    Args:
-        x, y: координаты кнопки.
-        duration_sec: общая длительность пульсации в секундах.
-        hold_ms: длительность удержания в мс.
-        pause_ms: длительность паузы между нажатиями в мс.
-    """
+    """Пульсирует нажатием: удержание и отпускание в цикле."""
     start = time.time()
     while time.time() - start < duration_sec:
         tap_hold(x, y, hold_ms)
@@ -149,10 +132,7 @@ def pulse_gas(x, y, duration_sec=10, hold_ms=100, pause_ms=200):
 # ==============================================================================
 
 def get_touch_coordinates(timeout=10):
-    """
-    Читает лог касаний в реальном времени, переводит в экранные координаты и возвращает их.
-    (Ранее называлась monitor_touches3)
-    """
+    """Читает лог касаний в реальном времени, переводит в экранные координаты."""
     print(f"⏳ Слушаю экран {timeout} секунд. Касайся экрана!")
     process = subprocess.Popen(
         ["adb", "shell", "getevent", "-l", TOUCH_DEVICE],
@@ -215,12 +195,7 @@ def record_touches_to_file(timeout=5, filename="touchscreen_log.txt"):
 
 
 def parse_touch_log(filename="touchscreen_log.txt"):
-    """
-    Парсит записанный лог и извлекает усредненные координаты касаний.
-    
-    Returns:
-        list: Список словарей с данными о каждом касании.
-    """
+    """Парсит записанный лог и извлекает усредненные координаты касаний."""
     try:
         with open(filename, "r", encoding="utf-8") as f:
             content = f.read()
@@ -264,57 +239,31 @@ def parse_touch_log(filename="touchscreen_log.txt"):
 
 def click_start_if_found(template_path="button_start.png", threshold=0.8, 
                          debug=False, debug_path=None):
-    """
-    Находит шаблон на экране Android-устройства.
-    
-    Режимы работы:
-        - debug=False (по умолчанию): находит и тапает по центру шаблона.
-        - debug=True: НЕ тапает, а рисует рамку вокруг найденного 
-          и сохраняет скриншот в debug_path (режим отладки).
-    
-    Args:
-        template_path: путь к PNG-файлу шаблона.
-        threshold: минимальная уверенность совпадения (0..1).
-        debug: если True — режим отладки (без клика, с сохранением скрина).
-        debug_path: путь для сохранения. Если None — сохраняется в 
-                    screenshot/debug_<timestamp>.png автоматически.
-    
-    Returns:
-        bool: True, если шаблон найден, иначе False.
-    """
-    import time
-    from pathlib import Path
-    
-    # 1. Читаем шаблон
+    """Находит шаблон. Если debug=True, рисует рамку и сохраняет скрин."""
     template = cv2.imread(template_path)
     if template is None:
-        print(f"❌ Не найден файл шаблона: {template_path}")
+        print(f"❌ Не найден шаблон: {template_path}")
         return False
 
-    # 2. Делаем скриншот через ADB
     raw_bytes = subprocess.run(
         ["adb", "exec-out", "screencap", "-p"],
         stdout=subprocess.PIPE, check=True
     ).stdout
 
-    # 3. Декодируем в numpy-массив
     screen = cv2.imdecode(np.frombuffer(raw_bytes, dtype=np.uint8), cv2.IMREAD_COLOR)
     if screen is None:
-        print(" Не удалось декодировать скриншот. Проверьте подключение.")
+        print("❌ Не удалось декодировать скриншот")
         return False
 
-    # 4. Ищем шаблон
     result = cv2.matchTemplate(screen, template, cv2.TM_CCOEFF_NORMED)
     _, max_val, _, max_loc = cv2.minMaxLoc(result)
 
-    # 5. Если нашли — обрабатываем
     if max_val >= threshold:
         h, w = template.shape[:2]
         cx = max_loc[0] + w // 2
         cy = max_loc[1] + h // 2
 
         if debug:
-            # 🛠️ РЕЖИМ ОТЛАДКИ: рисуем рамку и сохраняем
             x1, y1 = max_loc[0], max_loc[1]
             x2, y2 = max_loc[0] + w, max_loc[1] + h
             debug_img = screen.copy()
@@ -323,18 +272,13 @@ def click_start_if_found(template_path="button_start.png", threshold=0.8,
                         (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 
                         0.8, (0, 255, 0), 2)
             
-            # Если путь не задан — формируем автоматически
             if debug_path is None:
-                debug_dir = Path("screenshot")
-                debug_dir.mkdir(exist_ok=True)
-                debug_path = str(debug_dir / f"debug_{int(time.time())}.png")
-            
+                debug_path = "debug.png"
+                
             cv2.imwrite(debug_path, debug_img)
             print(f"🛠️ [DEBUG] Найдено! Уверенность: {max_val:.3f}")
-            print(f"🛠️ [DEBUG] Центр: ({cx}, {cy})")
-            print(f"🛠️ [DEBUG] Скрин с рамкой сохранён: {debug_path}")
+            print(f"🛠️ [DEBUG] Скрин сохранён: {debug_path}")
         else:
-            # 🎯 ОБЫЧНЫЙ РЕЖИМ: тапаем
             print(f"\n✅ НАЙДЕНО! Уверенность: {max_val:.3f}")
             subprocess.run(
                 ["adb", "shell", "input", "tap", str(cx), str(cy)],
@@ -348,20 +292,13 @@ def click_start_if_found(template_path="button_start.png", threshold=0.8,
 
 
 def find_template(screen, template, threshold=0.85, roi=None):
-    """
-    Ищет шаблон на numpy-массиве экрана.
-    
-    Args:
-        roi (tuple): (x1, y1, x2, y2) — область поиска. Если None, ищет по всему экрану.
-    Returns:
-        tuple: (cx, cy) центра шаблона или None.
-    """
+    """Ищет шаблон на numpy-массиве экрана."""
     h, w = template.shape[:2]
     x1, y1 = (0, 0) if roi is None else roi[:2]
     sub = screen[y1:roi[3], x1:roi[2]] if roi else screen
 
     if sub.shape[0] < h or sub.shape[1] < w:
-        return None  # Шаблон больше области поиска
+        return None
 
     result = cv2.matchTemplate(sub, template, cv2.TM_CCOEFF_NORMED)
     _, max_val, _, max_loc = cv2.minMaxLoc(result)
@@ -412,12 +349,60 @@ def draw_roi(screen, roi, output_path="debug_roi.png"):
 
 
 # ==============================================================================
-# [7] ШПАРГАЛКА / ЗАГОТОВКИ (Не выполняется при импорте)
+# [7] ПРОВЕРКА И РАЗБЛОКИРОВКА ЭКРАНА
+# ==============================================================================
+
+def get_screen_status():
+    """
+    Проверяет статус экрана через dumpsys display.
+    Возвращает: 'ON', 'OFF' или 'UNKNOWN'
+    """
+    result = subprocess.run(
+        ["adb", "shell", "dumpsys", "display"],
+        capture_output=True, text=True
+    )
+    for line in result.stdout.splitlines():
+        if "mScreenState=" in line:
+            return line.split("=")[-1].strip()
+    return "UNKNOWN"
+
+
+def check_and_unlock_screen(pin="seal"):
+    """
+    Проверяет состояние экрана. Если выключен или заблокирован — разблокирует.
+    """
+    print("\n🔒 Проверка состояния экрана...")
+    
+    status = get_screen_status()
+    print(f"   Текущий статус: {status}")
+    
+    if status == "ON":
+        print("✅ Экран включён")
+        return True
+    
+    print("⚠️ Экран выключен. Выполняю разблокировку...")
+    
+    unlock_cmd = (
+        "input keyevent 224 && "
+        "input swipe 540 1500 540 500 500 && "
+        f"input text {pin} && "
+        "input keyevent 66"
+    )
+    subprocess.run(["adb", "shell", unlock_cmd], capture_output=True, text=True)
+    time.sleep(2)
+    
+    status = get_screen_status()
+    if status == "ON":
+        print("✅ Экран успешно разблокирован")
+        return True
+    else:
+        print("❌ Не удалось разблокировать экран. Проверьте PIN-код.")
+        return False
+
+
+# ==============================================================================
+# [8] ШПАРГАЛКА / ЗАГОТОВКИ (Не выполняется при импорте)
 # ==============================================================================
 if __name__ == "__main__":
-    # Пример замера времени выполнения функции:
-    # t0 = time.perf_counter()
-    # grab_screen()
-    # print(f"Выполнено за: {(time.perf_counter() - t0) * 1000:.0f} мс")
-    
-    print(f"Модуль adb_utils v{__version__} загружен. Запустите функции напрямую.")
+    print(f"✅ Модуль adb_tools v{__version__} загружен корректно.")
+    print("💡 Подсказка: импортируйте функции из этого файла в ваши скрипты.")
