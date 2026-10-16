@@ -262,28 +262,65 @@ def parse_touch_log(filename="touchscreen_log.txt"):
 # [5] КОМПЬЮТЕРНОЕ ЗРЕНИЕ И АВТОМАТИЗАЦИЯ (OPENCV)
 # ==============================================================================
 
-def click_start_if_found(template_path="button_start.png", threshold=0.8):
-    """Находит шаблон на экране Android-устройства и тапает по его центру."""
+def click_start_if_found(template_path="button_start.png", threshold=0.8, 
+                         debug=False, debug_path="debug_found.png"):
+    """
+    Находит шаблон на экране Android-устройства.
+    
+    Режимы работы:
+        - debug=False (по умолчанию): находит и тапает по центру шаблона.
+        - debug=True: НЕ тапает, а рисует рамку вокруг найденного 
+          и сохраняет скриншот в debug_path (режим отладки).
+    """
+    # 1. Читаем шаблон
     template = cv2.imread(template_path)
     if template is None:
         print(f"❌ Не найден файл шаблона: {template_path}")
         return False
 
-    raw_bytes = subprocess.run(["adb", "exec-out", "screencap", "-p"], stdout=subprocess.PIPE, check=True).stdout
+    # 2. Делаем скриншот через ADB
+    raw_bytes = subprocess.run(
+        ["adb", "exec-out", "screencap", "-p"],
+        stdout=subprocess.PIPE, check=True
+    ).stdout
+
+    # 3. Декодируем в numpy-массив
     screen = cv2.imdecode(np.frombuffer(raw_bytes, dtype=np.uint8), cv2.IMREAD_COLOR)
-    
     if screen is None:
         print("❌ Не удалось декодировать скриншот. Проверьте подключение.")
         return False
 
+    # 4. Ищем шаблон
     result = cv2.matchTemplate(screen, template, cv2.TM_CCOEFF_NORMED)
     _, max_val, _, max_loc = cv2.minMaxLoc(result)
 
+    # 5. Если нашли — обрабатываем
     if max_val >= threshold:
         h, w = template.shape[:2]
-        cx, cy = max_loc[0] + w // 2, max_loc[1] + h // 2
-        print(f"\n✅ НАЙДЕНО! Уверенность: {max_val:.3f}. Тап в ({cx}, {cy})")
-        subprocess.run(["adb", "shell", "input", "tap", str(cx), str(cy)], capture_output=True)
+        cx = max_loc[0] + w // 2
+        cy = max_loc[1] + h // 2
+
+        if debug:
+            # 🛠️ РЕЖИМ ОТЛАДКИ: рисуем рамку и сохраняем
+            x1, y1 = max_loc[0], max_loc[1]
+            x2, y2 = max_loc[0] + w, max_loc[1] + h
+            debug_img = screen.copy()
+            cv2.rectangle(debug_img, (x1, y1), (x2, y2), (0, 255, 0), 3)
+            cv2.putText(debug_img, f"OK: {max_val:.2f}", 
+                        (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 
+                        0.8, (0, 255, 0), 2)
+            cv2.imwrite(debug_path, debug_img)
+            print(f"🛠️ [DEBUG] Найдено! Уверенность: {max_val:.3f}")
+            print(f"🛠️ [DEBUG] Центр: ({cx}, {cy})")
+            print(f"🛠️ [DEBUG] Скрин с рамкой сохранён: {debug_path}")
+        else:
+            # 🎯 ОБЫЧНЫЙ РЕЖИМ: тапаем
+            print(f"\n✅ НАЙДЕНО! Уверенность: {max_val:.3f}")
+            subprocess.run(
+                ["adb", "shell", "input", "tap", str(cx), str(cy)],
+                stdout=subprocess.PIPE, check=True
+            )
+            print(f"👆 Тап в ({cx}, {cy})")
         return True
     else:
         print(f"\n❌ НЕ найдено (порог {threshold} > {max_val:.3f})")
