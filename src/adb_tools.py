@@ -1,5 +1,40 @@
 """
 Модуль утилит для автоматизации Android через ADB и OpenCV.
+
+=== НАВИГАЦИЯ ПО ФУНКЦИЯМ ===
+
+1. Управление устройством и приложением
+   1.1. run_game()                - Запуск указанного приложения/игры через ADB.
+   1.2. get_screen_status()       - Проверка текущего состояния экрана (включен/выключен).
+   1.3. check_and_unlock_screen() - Проверка состояния экрана и его разблокировка с помощью PIN-кода.
+
+2. Захват и работа с изображением экрана
+   2.1. screenshot()              - Создание скриншота и сохранение его в файл.
+   2.2. grab_screen()             - Получение скриншота в виде массива NumPy (OpenCV image) для дальнейшей обработки.
+   2.3. record_screen()           - Запись видео с экрана устройства в файл.
+
+3. Эмуляция пользовательского ввода
+   3.1. tap()                     - Эмуляция одиночного нажатия (тапа) по заданным координатам.
+   3.2. swipe()                   - Эмуляция свайпа (проведения) между двумя точками.
+   3.3. tap_hold()                - Эмуляция удержания нажатия в заданной точке.
+   3.4. pulse_gas()               - Циклическое нажатие с удержанием (например, имитация педали газа).
+
+4. Анализ и логирование касаний
+   4.1. get_touch_coordinates()   - Интерактивный сбор и вывод координат касаний в реальном времени.
+   4.2. record_touches_to_file()  - Запись сырых данных событий касания (getevent) в текстовый файл.
+   4.3. parse_touch_log()         - Парсинг лог-файла касаний для вычисления усредненных координат.
+
+5. Компьютерное зрение и поиск шаблонов
+   5.1. find_template()           - Поиск шаблона на изображении (с поддержкой области интереса ROI).
+   5.2. wait_for_template()       - Ожидание появления шаблона на экране в течение заданного времени.
+   5.3. click_start_if_found()    - Поиск шаблона на экране и автоматический клик по нему при обнаружении.
+
+6. Визуализация и отладка
+   6.1. draw_tap()                - Визуализация точки нажатия (круга) на изображении с помощью PIL.
+   6.2. draw_roi()                - Визуализация области интереса (ROI) на изображении с помощью OpenCV.
+
+7. Прочие утилиты
+   7.1. speak_text()              - Озвучивание текста через системный TTS (termux-tts-speak).
 """
 
 import subprocess
@@ -18,6 +53,10 @@ from config import (
 
 __version__ = "1.2.0"
 
+# ==============================================================================
+# 1. Управление устройством и приложением
+# ==============================================================================
+
 def run_game():
     result = subprocess.run(
         ["adb", "shell", "am", "start", "-f", "0x10020000", "-n", f"{PACKAGE_NAME}/{ACTIVITY_NAME}"],
@@ -27,6 +66,48 @@ def run_game():
         print(f" Игра {PACKAGE_NAME} запущена")
     else:
         print(f" Ошибка запуска: {result.stderr}")
+
+def get_screen_status():
+    result = subprocess.run(
+        ["adb", "shell", "dumpsys", "display"],
+        capture_output=True, text=True
+    )
+    for line in result.stdout.splitlines():
+        if "mScreenState=" in line:
+            return line.split("=")[-1].strip()
+    return "UNKNOWN"
+
+def check_and_unlock_screen(pin="seal"):
+    print("\n Проверка состояния экрана...")
+    status = get_screen_status()
+    print(f"   Текущий статус: {status}")
+    if status == "ON":
+        print(" Экран включён")
+        return True
+    print(" Экран выключен. Выполняю разблокировку...")
+    unlock_cmd = (
+        "input keyevent 224 && "
+        "sleep 1 && "
+        "input swipe 540 1500 540 500 500 && "
+        "sleep 0.5 && "
+        f"input text {pin} && "
+        "sleep 0.5 && "
+        "input keyevent 66"
+    )
+    subprocess.run(["adb", "shell", unlock_cmd], capture_output=True, text=True)
+    time.sleep(2)
+    status = get_screen_status()
+    if status == "ON":
+        print(" Экран успешно разблокирован")
+        return True
+    else:
+        print(" Не удалось разблокировать экран. Проверьте PIN-код.")
+        return False
+
+
+# ==============================================================================
+# 2. Захват и работа с изображением экрана
+# ==============================================================================
 
 def screenshot(filename="screen.png"):
     result = subprocess.run(["adb", "exec-out", "screencap", "-p"], capture_output=True)
@@ -52,8 +133,10 @@ def record_screen(filename="video.mp4", size="1728x1080", time_limit=10):
         return None
     return result.stdout
 
-def speak_text(text):
-    subprocess.run(["termux-tts-speak", "-e", "com.google.android.tts", "-l", "ru", text])
+
+# ==============================================================================
+# 3. Эмуляция пользовательского ввода
+# ==============================================================================
 
 def tap(x, y):
     subprocess.run(["adb", "shell", "input", "tap", str(x), str(y)], capture_output=True, text=True)
@@ -78,6 +161,11 @@ def pulse_gas(x, y, duration_sec=10, hold_ms=100, pause_ms=200):
         tap_hold(x, y, hold_ms)
         time.sleep(pause_ms / 1000)
     print(f" Пульсация {duration_sec}с завершена (удержание {hold_ms}мс, пауза {pause_ms}мс)")
+
+
+# ==============================================================================
+# 4. Анализ и логирование касаний
+# ==============================================================================
 
 def get_touch_coordinates(timeout=10):
     print(f" Слушаю экран {timeout} секунд. Касайся экрана!")
@@ -166,6 +254,56 @@ def parse_touch_log(filename="touchscreen_log.txt"):
     print(f" Всего касаний: {len(results)}")
     return results
 
+
+# ==============================================================================
+# 5. Компьютерное зрение и поиск шаблонов
+# ==============================================================================
+
+def find_template(screen, template, threshold=0.85, roi=None):
+    if isinstance(template, str):
+        template = cv2.imread(template)
+        if template is None:
+            print(f" Не удалось загрузить шаблон: {template}")
+            return None
+    screen_gray = cv2.cvtColor(screen, cv2.COLOR_BGR2GRAY)
+    template_gray = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)
+    h, w = template_gray.shape[:2]
+    if roi is not None:
+        x1, y1, x2, y2 = roi
+        x1, y1 = max(0, x1), max(0, y1)
+        x2, y2 = min(screen_gray.shape[1], x2), min(screen_gray.shape[0], y2)
+        sub = screen_gray[y1:y2, x1:x2]
+        offset_x, offset_y = x1, y1
+    else:
+        sub = screen_gray
+        offset_x, offset_y = 0, 0
+    if sub.shape[0] < h or sub.shape[1] < w:
+        return None
+    result = cv2.matchTemplate(sub, template_gray, cv2.TM_CCOEFF_NORMED)
+    _, max_val, _, max_loc = cv2.minMaxLoc(result)
+    if max_val >= threshold:
+        return (max_loc[0] + w // 2 + offset_x, max_loc[1] + h // 2 + offset_y)
+    return None
+
+def wait_for_template(template, timeout=30, interval=1.0, threshold=0.85, roi=None):
+    if isinstance(template, str):
+        template_img = cv2.imread(template)
+        if template_img is None:
+            print(f" Не удалось загрузить шаблон: {template}")
+            return None
+    else:
+        template_img = template
+    t0 = time.perf_counter()
+    while True:
+        screen = grab_screen()
+        if screen is not None:
+            pos = find_template(screen, template_img, threshold, roi)
+            if pos is not None:
+                return pos
+        if time.perf_counter() - t0 > timeout:
+            return None
+        time.sleep(interval)
+
 def click_start_if_found(template_path="button_start.png", threshold=0.8, 
                          debug=False, debug_path=None):
     template = cv2.imread(template_path)
@@ -213,50 +351,10 @@ def click_start_if_found(template_path="button_start.png", threshold=0.8,
         print(f"\n НЕ найдено (порог {threshold} > {max_val:.3f})")
         return False
 
-def find_template(screen, template, threshold=0.85, roi=None):
-    if isinstance(template, str):
-        template = cv2.imread(template)
-        if template is None:
-            print(f" Не удалось загрузить шаблон: {template}")
-            return None
-    screen_gray = cv2.cvtColor(screen, cv2.COLOR_BGR2GRAY)
-    template_gray = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)
-    h, w = template_gray.shape[:2]
-    if roi is not None:
-        x1, y1, x2, y2 = roi
-        x1, y1 = max(0, x1), max(0, y1)
-        x2, y2 = min(screen_gray.shape[1], x2), min(screen_gray.shape[0], y2)
-        sub = screen_gray[y1:y2, x1:x2]
-        offset_x, offset_y = x1, y1
-    else:
-        sub = screen_gray
-        offset_x, offset_y = 0, 0
-    if sub.shape[0] < h or sub.shape[1] < w:
-        return None
-    result = cv2.matchTemplate(sub, template_gray, cv2.TM_CCOEFF_NORMED)
-    _, max_val, _, max_loc = cv2.minMaxLoc(result)
-    if max_val >= threshold:
-        return (max_loc[0] + w // 2 + offset_x, max_loc[1] + h // 2 + offset_y)
-    return None
 
-def wait_for_template(template, timeout=30, interval=1.0, threshold=0.85, roi=None):
-    if isinstance(template, str):
-        template_img = cv2.imread(template)
-        if template_img is None:
-            print(f" Не удалось загрузить шаблон: {template}")
-            return None
-    else:
-        template_img = template
-    t0 = time.perf_counter()
-    while True:
-        screen = grab_screen()
-        if screen is not None:
-            pos = find_template(screen, template_img, threshold, roi)
-            if pos is not None:
-                return pos
-        if time.perf_counter() - t0 > timeout:
-            return None
-        time.sleep(interval)
+# ==============================================================================
+# 6. Визуализация и отладка
+# ==============================================================================
 
 def draw_tap(input_path, output_path, x, y, radius=25, color='red'):
     img = Image.open(input_path)
@@ -275,39 +373,14 @@ def draw_roi(screen, roi, output_path="debug_roi.png"):
     cv2.imwrite(output_path, debug_img)
     print(f" ROI нарисован и сохранен: {output_path}")
 
-def get_screen_status():
-    result = subprocess.run(
-        ["adb", "shell", "dumpsys", "display"],
-        capture_output=True, text=True
-    )
-    for line in result.stdout.splitlines():
-        if "mScreenState=" in line:
-            return line.split("=")[-1].strip()
-    return "UNKNOWN"
 
-def check_and_unlock_screen(pin="seal"):
-    print("\n Проверка состояния экрана...")
-    status = get_screen_status()
-    print(f"   Текущий статус: {status}")
-    if status == "ON":
-        print(" Экран включён")
-        return True
-    print(" Экран выключен. Выполняю разблокировку...")
-    unlock_cmd = (
-        "input keyevent 224 && "
-        "input swipe 540 1500 540 500 500 && "
-        f"input text {pin} && "
-        "input keyevent 66"
-    )
-    subprocess.run(["adb", "shell", unlock_cmd], capture_output=True, text=True)
-    time.sleep(2)
-    status = get_screen_status()
-    if status == "ON":
-        print(" Экран успешно разблокирован")
-        return True
-    else:
-        print(" Не удалось разблокировать экран. Проверьте PIN-код.")
-        return False
+# ==============================================================================
+# 7. Прочие утилиты
+# ==============================================================================
+
+def speak_text(text):
+    subprocess.run(["termux-tts-speak", "-e", "com.google.android.tts", "-l", "ru", text])
+
 
 if __name__ == "__main__":
     print(f" Модуль adb_tools v{__version__} загружен корректно.")

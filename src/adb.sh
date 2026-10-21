@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Информация о скрипте
-VERSION="1.1.0"
+VERSION="1.2.0"
 AUTHOR="Китанов Виктор"
 
 adb start-server
@@ -11,7 +11,7 @@ echo "Сейчас откроются настройки. Найди пункт 
 echo ""
 
 # Открываем меню разработчика Android
-am start -a android.settings.APPLICATION_DEVELOPMENT_SETTINGS
+adb shell am start -a android.settings.APPLICATION_DEVELOPMENT_SETTINGS > /dev/null 2>&1
 
 read -p "Как включишь отладку, возвращайся сюда и жми Enter..."
 
@@ -48,5 +48,23 @@ echo "=== ШАГ 4: Проверка списка устройств ==="
 adb devices
 
 echo ""
-echo "🎉 Готово! Если выше написано 'device', то кликер готов к работе."
+echo "=== ШАГ 5: Защита SSH-сессий от падения ==="
+echo "Настраиваем лимит фоновых процессов, чтобы Android не убивал бота..."
 
+# 📝 ЗАМЕТКА ДЛЯ СЕБЯ НА БУДУЩЕЕ:
+# Периодически наблюдался внезапный обрыв фоновой SSH-сессии при сворачивании Termux.
+# Анализ системного лога (adb logcat) показал ошибку: "Process PhantomProcessRecord ... died".
+# Причина: Android по умолчанию жестко убивает скрытые (фантомные) дочерние процессы, 
+# если их лимит превышает 32 на всё устройство.
+# Чтобы сессии не отваливались, увеличиваем этот лимит в 4 раза — с 32 до 128.
+
+# Меняем настройки «инспектора» Android
+adb shell device_config put activity_manager max_phantom_processes 128
+adb shell settings put global settings_enable_monitor_phantom_procs true
+
+# Проверяем, сколько процессов сейчас запущено для контроля
+echo "Проверка: сейчас в фоне работает фантомных процессов:"
+adb shell dumpsys activity processes | grep "PhantomProcessRecord" | wc -l
+
+echo ""
+echo "🎉 Готово! Если в Шаге 4 написано 'device', то кликер и фоновый SSH готовы к работе."

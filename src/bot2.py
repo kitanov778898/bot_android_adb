@@ -13,10 +13,13 @@ import subprocess
 import time
 from pathlib import Path
 from adb_tools import (
-    run_game, screenshot, swipe,
-    pulse_gas,
-    check_and_unlock_screen, wait_for_template
-)
+	run_game,
+	screenshot,
+	swipe,
+	pulse_gas,
+	check_and_unlock_screen, 
+	wait_for_template
+	)
 
 __version__ = "1.1.6"
 
