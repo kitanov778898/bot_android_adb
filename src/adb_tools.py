@@ -10,8 +10,9 @@
 
 2. Захват и работа с изображением экрана
    2.1. screenshot()              - Создание скриншота и сохранение его в файл.
-   2.2. grab_screen()             - Получение скриншота в виде массива NumPy (OpenCV image) для дальнейшей обработки.
-   2.3. record_screen()           - Запись видео с экрана устройства в файл.
+   2.2. grab_screen_gray()        - Получение скриншота в оттенках серого (NumPy array) для быстрой обработки.
+   2.3. grab_screen()             - Получение цветного скриншота (NumPy array, BGR) для дальнейшей обработки.
+   2.4. record_screen()           - Запись видео с экрана устройства в файл.
 
 3. Эмуляция пользовательского ввода
    3.1. tap()                     - Эмуляция одиночного нажатия (тапа) по заданным координатам.
@@ -43,6 +44,7 @@ import select
 import cv2
 import numpy as np
 from PIL import Image, ImageDraw
+from functools import wraps
 
 from config import (
     PACKAGE_NAME, ACTIVITY_NAME,
@@ -51,7 +53,26 @@ from config import (
     CLICK_INTERVAL, MAX_CLICKS
 )
 
-__version__ = "1.2.0"
+__version__ = "1.3.1"  # Обновил версию, так как добавлена новая функциональность
+
+
+def measure_time(func):
+    """Декоратор для замера времени выполнения функции.
+
+    Оборачивает функцию и при каждом вызове выводит в консоль
+    время её выполнения в миллисекундах с использованием
+    высокоточного счётчика ``time.perf_counter``.
+    """
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        t0 = time.perf_counter()
+        result = func(*args, **kwargs)
+        t1 = time.perf_counter()
+        elapsed_ms = (t1 - t0) * 1000
+        print(f"⏱ Функция '{func.__name__}' выполнялась: {elapsed_ms:.2f} мс")
+        return result
+    return wrapper
+
 
 # ==============================================================================
 # 1. Управление устройством и приложением
@@ -115,10 +136,47 @@ def screenshot(filename="screen.png"):
         f.write(result.stdout)
     print(f" Скриншот сохранен: {filename}")
 
-def grab_screen():
-    result = subprocess.run(["adb", "exec-out", "screencap", "-p"], capture_output=True)
+def grab_screen_gray():
+    """
+    Захватывает скриншот экрана Android через ADB в оттенках серого.
+    
+    Выполняет команду `adb exec-out screencap -p` для получения PNG-скриншота
+    напрямую в память (без сохранения на диск), декодирует его в numpy array
+    в режиме grayscale.
+    
+    Returns:
+        numpy.ndarray | None: Изображение в оттенках серого (1 канал) 
+        в формате numpy array, или None, если произошла ошибка.
+    """
+    result = subprocess.run(
+        ["adb", "exec-out", "screencap", "-p"], 
+        capture_output=True
+    )
     if result.returncode != 0 or not result.stdout:
         return None
+    
+    raw = np.frombuffer(result.stdout, dtype=np.uint8)
+    return cv2.imdecode(raw, cv2.IMREAD_GRAYSCALE)
+
+def grab_screen():
+    """
+    Захватывает скриншот экрана Android через ADB в цвете (BGR).
+    
+    Выполняет команду `adb exec-out screencap -p` для получения PNG-скриншота
+    напрямую в память (без сохранения на диск), декодирует его в numpy array
+    в цветном режиме BGR. Альфа-канал (прозрачность) игнорируется.
+    
+    Returns:
+        numpy.ndarray | None: Цветное изображение в формате BGR (3 канала) 
+        в виде numpy array, или None, если произошла ошибка.
+    """
+    result = subprocess.run(
+        ["adb", "exec-out", "screencap", "-p"], 
+        capture_output=True
+    )
+    if result.returncode != 0 or not result.stdout:
+        return None
+    
     raw = np.frombuffer(result.stdout, dtype=np.uint8)
     return cv2.imdecode(raw, cv2.IMREAD_COLOR)
 
@@ -304,24 +362,23 @@ def wait_for_template(template, timeout=30, interval=1.0, threshold=0.85, roi=No
             return None
         time.sleep(interval)
 
-def click_start_if_found(template_path="button_start.png", threshold=0.8, 
-                         debug=False, debug_path=None):
+def click_start_if_found(template_path="button_start.png", threshold=0.8, debug=False, debug_path=None):
     template = cv2.imread(template_path)
     if template is None:
         print(f" Не найден шаблон: {template_path}")
         return False
-    raw_bytes = subprocess.run(
-        ["adb", "exec-out", "screencap", "-p"],
-        stdout=subprocess.PIPE, check=True
-    ).stdout
-    screen = cv2.imdecode(np.frombuffer(raw_bytes, dtype=np.uint8), cv2.IMREAD_COLOR)
+    
+    # 💡 ОПТИМИЗАЦИЯ: Используем нашу новую функцию grab_screen() вместо дублирования кода!
+    screen = grab_screen()
     if screen is None:
-        print(" Не удалось декодировать скриншот")
+        print(" Не удалось получить скриншот")
         return False
+        
     screen_gray = cv2.cvtColor(screen, cv2.COLOR_BGR2GRAY)
     template_gray = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)
     result = cv2.matchTemplate(screen_gray, template_gray, cv2.TM_CCOEFF_NORMED)
     _, max_val, _, max_loc = cv2.minMaxLoc(result)
+    
     if max_val >= threshold:
         h, w = template_gray.shape[:2]
         cx = max_loc[0] + w // 2

@@ -1,0 +1,172 @@
+# Команда для сохранения справочника прямо в Termux:
+cat > ~/ollama_guide.txt << 'EOF'
+============================================================
+  СПРАВОЧНИК: Локальная Ollama в Termux (Android/Планшет)
+  Автор: для Виктора | Дата: 29.10.2026
+============================================================
+
+[1] ПОДГОТОВКА TERMUX ПЕРЕД ПЕРЕЗАГРУЗКОЙ
+------------------------------------------------------------
+# Обновить пакеты
+pkg update && pkg upgrade -y
+
+# Установить базовые зависимости
+pkg install wget curl proot tar git -y
+
+# ВАЖНО: отключить оптимизацию батареи для Termux
+# Настройки Android -> Приложения -> Termux -> Батарея -> Без ограничений
+
+# Создать swap-файл (ОБЯЗАТЕЛЬНО для моделей >1B)
+pkg install tsu -y
+sudo apt install android-tools -y 2>/dev/null
+# Альтернатива через termux-setup-storage + dd:
+pkg install coreutils
+dd if=/dev/zero of=~/swapfile bs=1M count=3072   # 3 ГБ swap
+chmod 600 ~/swapfile
+mkswap ~/swapfile
+# Активация после каждой перезагрузки:
+swapon ~/swapfile
+
+
+[2] УСТАНОВКА OLLAMA В TERMUX
+------------------------------------------------------------
+# Способ 1: через официальный репозиторий Termux (рекомендуется)
+pkg install ollama -y
+
+# Способ 2: через скрипт (если в репо нет)
+curl -fsSL https://ollama.com/install.sh | sh
+
+# Проверка установки
+ollama --version
+
+
+[3] ПЕРЕМЕННЫЕ ОКРУЖЕНИЯ (настроить один раз)
+------------------------------------------------------------
+# Добавить в ~/.bashrc или ~/.zshrc:
+cat >> ~/.bashrc << 'ENVEOF'
+# === Ollama settings ===
+export OLLAMA_HOST=127.0.0.1:11434
+export OLLAMA_MODELS=~/.ollama/models
+export OLLAMA_NUM_PARALLEL=1          # экономия RAM
+export OLLAMA_MAX_LOADED_MODELS=1     # только 1 модель в памяти
+export OLLAMA_KEEP_ALIVE=10m          # выгружать через 10 мин простоя
+ENVEOF
+
+source ~/.bashrc
+
+
+[4] ЗАПУСК СЕРВЕРА OLLAMA
+------------------------------------------------------------
+# Активировать swap (после перезагрузки!)
+swapon ~/swapfile
+
+# Запустить сервер в фоне через tmux
+tmux new-session -d -s ollama 'ollama serve'
+
+# Проверить, что сервер работает
+curl http://127.0.0.1:11434
+# Должно ответить: "Ollama is running"
+
+
+[5] СКАЧИВАНИЕ И ЗАПУСК МОДЕЛЕЙ
+------------------------------------------------------------
+# Список доступных моделей: https://ollama.com/library
+
+# Маленькие модели для планшета (рекомендую начать с них):
+ollama pull qwen2.5:1.5b      # ~1 ГБ RAM — быстрая
+ollama pull qwen2.5:3b        # ~2 ГБ RAM — оптимально
+ollama pull phi3:mini         # ~2.5 ГБ RAM — умная
+ollama pull tinyllama         # ~600 МБ RAM — самая лёгкая
+
+# Запуск модели в интерактивном режиме
+ollama run qwen2.5:3b
+
+# Внутри чата команды:
+#   /bye        — выйти
+#   /show       — информация о модели
+#   /reset      — сбросить контекст
+#   /?          — помощь
+
+
+[6] УПРАВЛЕНИЕ ЧЕРЕZ TMUX
+------------------------------------------------------------
+tmux ls                          # список сессий
+tmux attach -t ollama            # подключиться к серверу
+# Выйти из tmux (не закрывая): Ctrl+B, затем D
+
+tmux kill-session -t ollama      # убить сессию
+pkill ollama                     # убить все процессы ollama
+
+
+[7] ПОЛЕЗНЫЕ КОМАНДЫ OLLAMA
+------------------------------------------------------------
+ollama list                      # список установленных моделей
+ollama ps                        # какие модели сейчас в RAM
+ollama show qwen2.5:3b           # информация о модели
+ollama rm имя_модели             # удалить модель
+ollama pull имя_модели:тег       # скачать конкретную версию
+
+
+[8] API (для ботов и скриптов)
+------------------------------------------------------------
+# Простой запрос через curl
+curl http://127.0.0.1:11434/api/generate -d '{
+  "model": "qwen2.5:3b",
+  "prompt": "Привет, как дела?",
+  "stream": false
+}'
+
+# Чат-запрос
+curl http://127.0.0.1:11434/api/chat -d '{
+  "model": "qwen2.5:3b",
+  "messages": [{"role": "user", "content": "Привет"}],
+  "stream": false
+}'
+
+
+[9] БЫСТРЫЙ СТАРТ ПОСЛЕ ПЕРЕЗАГРУЗКИ ПЛАНШЕТА
+------------------------------------------------------------
+# Выполнять по порядку после включения:
+swapon ~/swapfile
+tmux new-session -d -s ollama 'ollama serve'
+sleep 3
+curl http://127.0.0.1:11434
+ollama run qwen2.5:3b
+
+
+[10] РЕШЕНИЕ ПРОБЛЕМ
+------------------------------------------------------------
+Проблема: "killed" / модель вылетает
+Решение: не хватает RAM. Увеличьте swap или возьмите модель меньше.
+
+Проблема: "port already in use"
+Решение: pkill ollama && ollama serve
+
+Проблема: Termux закрывается в фоне
+Решение: в настройках Android отключить оптимизацию батареи +
+         использовать команду "termux-wake-lock"
+
+Проблема: медленная генерация
+Решение: использовать модель поменьше, закрыть другие приложения.
+
+
+[11] АВТОЗАПУСК (опционально)
+------------------------------------------------------------
+# Создать скрипт автозапуска
+cat > ~/start_ollama.sh << 'SCRIPTEOF'
+#!/bin/bash
+swapon ~/swapfile 2>/dev/null
+tmux new-session -d -s ollama 'ollama serve'
+echo "Ollama запущена в tmux-сессии 'ollama'"
+SCRIPTEOF
+chmod +x ~/start_ollama.sh
+
+# Запуск одной командой:
+~/start_ollama.sh
+
+============================================================
+EOF
+
+echo "✅ Справочник сохранён: ~/ollama_guide.txt"
+echo "Посмотреть: cat ~/ollama_guide.txt"
+echo "Или через: nano ~/ollama_guide.txt"

@@ -11,7 +11,8 @@ echo "Сейчас откроются настройки. Найди пункт 
 echo ""
 
 # Открываем меню разработчика Android
-adb shell am start -a android.settings.APPLICATION_DEVELOPMENT_SETTINGS > /dev/null 2>&1
+#adb shell am start -a android.settings.APPLICATION_DEVELOPMENT_SETTINGS > /dev/null 2>&1
+am start -a android.settings.APPLICATION_DEVELOPMENT_SETTINGS > /dev/null 2>&1
 
 read -p "Как включишь отладку, возвращайся сюда и жми Enter..."
 
